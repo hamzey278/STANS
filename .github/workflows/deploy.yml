@@ -1,0 +1,122 @@
+name: STANS DevSecOps Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  validate:
+    name: Validate Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci --frozen-lockfile
+      - run: npm audit --audit-level=high
+      - run: npm run build
+        env:
+          NODE_OPTIONS: "--max-old-space-size=2048"
+
+  build-scan-push:
+    name: Build, Scan & Push
+    runs-on: [self-hosted, homelab]
+    needs: [validate]
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: |
+          docker build \
+            -t localhost:5000/stans-app:latest \
+            -t localhost:5000/stans-app:${{ github.sha }} \
+            .
+
+      - name: Trivy scan - block on CRITICAL
+        run: |
+          trivy image \
+            --severity CRITICAL \
+            --exit-code 1 \
+            --format sarif \
+            --output trivy-results.sarif \
+            localhost:5000/stans-app:latest
+        continue-on-error: true
+
+      - name: Trivy scan - report HIGH
+        run: |
+          trivy image \
+            --severity HIGH \
+            --exit-code 0 \
+            --format sarif \
+            --output trivy-high-results.sarif \
+            localhost:5000/stans-app:latest
+
+      - name: Upload Trivy CRITICAL results to Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-container-critical
+
+      - name: Upload Trivy HIGH results to Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-high-results.sarif
+          category: trivy-container-high
+
+      - name: Fail if CRITICAL vulnerabilities found
+        run: |
+          CRITICAL_COUNT=$(trivy image \
+            --severity CRITICAL \
+            --exit-code 0 \
+            --format json \
+            localhost:5000/stans-app:latest 2>/dev/null | \
+            jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length')
+          echo "CRITICAL vulnerabilities found: $CRITICAL_COUNT"
+          if [ "$CRITICAL_COUNT" -gt 0 ]; then
+            echo "Build blocked: $CRITICAL_COUNT CRITICAL CVE in container image"
+            exit 1
+          fi
+
+      - name: Login et push registry
+        run: |
+          echo "${{ secrets.HOMELAB_REGISTRY_PASSWORD }}" | \
+            docker login localhost:5000 \
+            -u ${{ secrets.HOMELAB_REGISTRY_USER }} \
+            --password-stdin
+          docker push localhost:5000/stans-app:latest
+          docker push localhost:5000/stans-app:${{ github.sha }}
+
+  deploy:
+    name: Deploy
+    runs-on: [self-hosted, homelab]
+    needs: [build-scan-push]
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    permissions: {}
+    steps:
+      - name: Deploy container
+        run: |
+          docker stop stans-app 2>/dev/null || true
+          docker rm   stans-app 2>/dev/null || true
+          docker run -d \
+            --name stans-app \
+            --restart=always \
+            -p 80:80 \
+            -p 443:443 \
+            -v /opt/stans/certs:/etc/nginx/certs:ro \
+            localhost:5000/stans-app:latest
+          sleep 8
+          curl -sk https://localhost/health && echo "Deploy OK"

@@ -1,0 +1,45 @@
+name: OpenBao Secrets - OIDC Auth
+
+on:
+  workflow_call:
+    outputs:
+      registry_user:
+        description: "Registry username from OpenBao"
+        value: ${{ jobs.fetch-secrets.outputs.registry_user }}
+      registry_password:
+        description: "Registry password from OpenBao"
+        value: ${{ jobs.fetch-secrets.outputs.registry_password }}
+
+permissions: {}
+
+jobs:
+  fetch-secrets:
+    name: Fetch secrets from OpenBao via OIDC
+    runs-on: [self-hosted, homelab]
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      registry_user: ${{ steps.secrets.outputs.registry_user }}
+      registry_password: ${{ steps.secrets.outputs.registry_password }}
+    steps:
+      - name: Authenticate to OpenBao via OIDC
+        uses: hashicorp/vault-action@v3
+        id: secrets
+        with:
+          url: ${{ vars.OPENBAO_URL }}
+          method: jwt
+          role: github-actions-stans
+          jwtGithubAudience: ${{ vars.OPENBAO_AUDIENCE }}
+          secrets: |
+            secret/data/homelab/registry username | registry_user ;
+            secret/data/homelab/registry password | registry_password
+        continue-on-error: true
+
+      - name: Fallback to GitHub Secrets if OpenBao unavailable
+        if: steps.secrets.outcome == 'failure'
+        run: |
+          echo "OpenBao unavailable - falling back to GitHub Secrets"
+          echo "registry_user=${{ secrets.HOMELAB_REGISTRY_USER }}" >> $GITHUB_OUTPUT
+          echo "registry_password=${{ secrets.HOMELAB_REGISTRY_PASSWORD }}" >> $GITHUB_OUTPUT
+        id: fallback

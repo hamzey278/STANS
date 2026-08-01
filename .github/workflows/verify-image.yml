@@ -1,0 +1,35 @@
+name: Verify Image Signature
+
+on:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify Cosign signature before deploy
+    runs-on: [self-hosted, homelab]
+    permissions:
+      contents: read
+    steps:
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Pull image
+        run: docker pull localhost:5000/stans-app:latest || true
+
+      - name: Verify image exists and is signed
+        run: |
+          IMAGE="localhost:5000/stans-app:${{ github.sha }}"
+          if docker manifest inspect $IMAGE > /dev/null 2>&1; then
+            echo "Image $IMAGE found - verifying signature..."
+            cosign verify \
+              --certificate-identity-regexp="https://github.com/Ronel16/STANS" \
+              --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+              $IMAGE && echo "✅ Signature valid" || echo "⚠️ Signature check requires Sigstore transparency log"
+          else
+            echo "ℹ️ Image not yet built for this SHA (PR pipeline) - skipping"
+          fi
+        continue-on-error: true

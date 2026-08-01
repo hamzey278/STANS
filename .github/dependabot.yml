@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+      directory: "/"
+          schedule:
+                interval: "weekly"
+                      day: "monday"
+                            time: "09:00"
+                                open-pull-requests-limit: 10
+                                    labels:
+                                          - "security"
+                                                - "dependencies"
+                                                    groups:
+                                                          production-dependencies:
+                                                                  dependency-type: "production"
+                                                                        development-dependencies:
+                                                                                dependency-type: "development"
+                                                                                    ignore:
+                                                                                          - dependency-name: "*"
+                                                                                                  update-types: ["version-update:semver-major"]
+                                                                                                  
