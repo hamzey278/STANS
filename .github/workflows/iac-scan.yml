@@ -1,0 +1,87 @@
+name: IaC Security Scan
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'Dockerfile'
+      - 'nginx/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'Dockerfile'
+      - 'nginx/**'
+      - '.github/workflows/**'
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  checkov:
+    name: Checkov - IaC misconfiguration scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Checkov scan - Dockerfile
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: dockerfile
+          output_format: sarif
+          output_file_path: checkov-dockerfile.sarif
+          soft_fail: true
+
+      - name: Upload Dockerfile scan to Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: checkov-dockerfile.sarif
+          category: checkov-dockerfile
+
+      - name: Checkov scan - nginx config
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: nginx
+          framework: nginx
+          output_format: sarif
+          output_file_path: checkov-nginx.sarif
+          soft_fail: true
+        continue-on-error: true
+
+      - name: Upload nginx scan to Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: checkov-nginx.sarif
+          category: checkov-nginx
+        continue-on-error: true
+
+      - name: Checkov scan - GitHub Actions workflows
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .github/workflows
+          framework: github_actions
+          output_format: sarif
+          output_file_path: checkov-actions.sarif
+          soft_fail: true
+
+      - name: Upload Actions scan to Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: checkov-actions.sarif
+          category: checkov-github-actions
+
+      - name: Checkov summary
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: dockerfile,nginx,github_actions
+          output_format: cli
+          soft_fail: true

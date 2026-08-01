@@ -1,0 +1,80 @@
+name: SBOM - Supply Chain Security
+
+on:
+  push:
+    branches: [ main ]
+  release:
+    types: [ published ]
+  schedule:
+    - cron: '0 5 * * 1'
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  sbom-source:
+    name: Generate SBOM - Source code
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate SBOM from source (SPDX)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          artifact-name: sbom-source-${{ github.sha }}.spdx.json
+          output-file: sbom-source.spdx.json
+
+      - name: Generate SBOM from source (CycloneDX)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          artifact-name: sbom-source-${{ github.sha }}.cdx.json
+          output-file: sbom-source.cdx.json
+
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-source-${{ github.sha }}
+          path: |
+            sbom-source.spdx.json
+            sbom-source.cdx.json
+          retention-days: 90
+
+  sbom-summary:
+    name: SBOM dependency summary
+    runs-on: ubuntu-latest
+    needs: [ sbom-source ]
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Count direct dependencies
+        run: |
+          DIRECT=$(jq '.dependencies | keys | length' package.json)
+          DEV=$(jq '.devDependencies | keys | length' package.json)
+          TOTAL=$(jq '.packages | keys | length' package-lock.json)
+          echo "## SBOM Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Category | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Direct dependencies | $DIRECT |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dev dependencies | $DEV |" >> $GITHUB_STEP_SUMMARY
+          echo "| Total packages (lockfile) | $TOTAL |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
