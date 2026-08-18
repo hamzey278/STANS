@@ -20,11 +20,25 @@ interface AlgorithmComparisonProps {
   edges?: Edge[];
 }
 
+interface MstAlgorithmResult {
+  steps: number;
+  edges: number;
+  weight: number;
+  time: string;
+}
+
+interface PathAlgorithmResult {
+  steps: number;
+  distance: string;
+  path: string;
+  time: string;
+}
+
 const AlgorithmComparison = ({ nodes: propNodes, edges: propEdges }: AlgorithmComparisonProps) => {
   const [hasRun, setHasRun] = useState(false);
-  const [kruskalResult, setKruskalResult] = useState<any>(null);
-  const [primResult, setPrimResult] = useState<any>(null);
-  const [dijkstraResult, setDijkstraResult] = useState<any>(null);
+  const [kruskalResult, setKruskalResult] = useState<MstAlgorithmResult | null>(null);
+  const [primResult, setPrimResult] = useState<MstAlgorithmResult | null>(null);
+  const [dijkstraResult, setDijkstraResult] = useState<PathAlgorithmResult | null>(null);
 
   // Use provided nodes/edges or fallback to sample data
   const defaultNodes: Node[] = [

@@ -12,6 +12,9 @@ RUN npm run build
 # ── STAGE 2 : SERVE ─────────────────────────────────────────
 FROM nginx:1.27-alpine
 
+# Install wget for healthcheck
+RUN apk add --no-cache wget
+
 # nginx config (must exist in build context)
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 
@@ -37,7 +40,8 @@ EXPOSE 80 443
 
 # If your nginx config serves /health on 443, this should succeed
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider --no-check-certificate https://localhost/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider --no-check-certificate http://localhost/health || exit 1
 
-USER nginx
+# Run as root (default) to allow Nginx PID handling
+
 CMD ["nginx", "-g", "daemon off;"]

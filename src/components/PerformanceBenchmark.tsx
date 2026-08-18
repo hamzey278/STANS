@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { kruskalAlgorithm } from "@/utils/kruskal";
+import { kruskalAlgorithm, type Edge } from "@/utils/kruskal";
 import { primAlgorithm } from "@/utils/prim";
 import { dijkstraAlgorithm } from "@/utils/dijkstra";
 import { Play, BarChart3, TrendingUp, Clock } from "lucide-react";
@@ -37,7 +37,7 @@ const PerformanceBenchmark = () => {
       nodes.push(`N${i}`);
     }
 
-    const edges: any[] = [];
+    const edges: Edge[] = [];
     const edgeCount = Math.min(nodeCount * (nodeCount - 1) / 2, nodeCount * 3);
     
     for (let i = 0; i < edgeCount; i++) {
