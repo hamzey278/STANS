@@ -94,7 +94,7 @@ jobs:
     name: Deploy to Remote Server
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: ${{ github.ref == 'refs/heads/main' && secrets.SSH_HOST != '' }}
+    if: ${{ github.ref == 'refs/heads/main' }}
     steps:
       - name: Deploy via SSH to Remote Server
         uses: appleboy/ssh-action@v1.0.3
