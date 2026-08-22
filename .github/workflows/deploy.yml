@@ -87,37 +87,3 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # -------------------------------------------------------------
-  # Job 3: (Optional) SSH Remote Deployment
-  # -------------------------------------------------------------
-  deploy:
-    name: Deploy to Remote Server
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: ${{ github.ref == 'refs/heads/main' }}
-    steps:
-      - name: Deploy via SSH to Remote Server
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          port: ${{ secrets.SSH_PORT || 22 }}
-          script: |
-            echo "Pulling latest Docker image..."
-            docker pull ${{ secrets.DOCKER_USERNAME || github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
-            
-            echo "Stopping and removing existing container..."
-            docker stop stans-app 2>/dev/null || true
-            docker rm stans-app 2>/dev/null || true
-            
-            echo "Running updated container..."
-            docker run -d \
-              --name stans-app \
-              --restart always \
-              -p 80:80 \
-              -p 443:443 \
-              ${{ secrets.DOCKER_USERNAME || github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
-            
-            echo "Deployment completed successfully!"
-
